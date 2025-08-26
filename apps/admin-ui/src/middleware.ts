@@ -31,7 +31,7 @@ async function verifyJwtEdge(token: string, secret: string): Promise<boolean> {
 }
 
 // Basic gate for serverless API routes: require admin token cookie (placeholder)
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (pathname.startsWith("/api")) {
     // Allow public health and stats reads

@@ -356,32 +356,21 @@ export function SourcesManager() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        triggerSweepMutation.mutate({
-                          sourceId: source.id,
-                          sweepType: "tail",
-                        })
-                      }
+                      onClick={async () => {
+                        try {
+                          await workerApi.runOnce();
+                          toast.success("Run triggered");
+                        } catch (e) {
+                          toast.error("Run failed");
+                        }
+                      }}
                       disabled={!source.enabled}
                     >
                       <Play className="h-4 w-4 mr-2" />
                       Run Now
                     </Button>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        triggerSweepMutation.mutate({
-                          sourceId: source.id,
-                          sweepType: "backfill",
-                        })
-                      }
-                      disabled={!source.enabled}
-                    >
-                      <TrendingUp className="h-4 w-4 mr-2" />
-                      Backfill
-                    </Button>
+                    {/* Removed Backfill for now to avoid 404s */}
 
                     <Button variant="ghost" size="sm">
                       <Settings className="h-4 w-4" />

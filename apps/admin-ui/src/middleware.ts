@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verifyToken } from "@/src/lib/auth";
 
 // Basic gate for serverless API routes: require admin token cookie (placeholder)
 export function middleware(req: NextRequest) {
@@ -18,6 +19,14 @@ export function middleware(req: NextRequest) {
     const token = req.cookies.get("ss_token")?.value;
     if (!token) {
       return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const secret = process.env.SECRET_KEY || "dev-secret";
+    const payload = verifyToken(token, secret);
+    if (!payload) {
+      return new NextResponse(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });

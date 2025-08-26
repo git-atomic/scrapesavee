@@ -40,7 +40,8 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith("/api/stats") ||
       pathname.startsWith("/api/blocks") ||
       pathname.startsWith("/api/runs") ||
-      (pathname.startsWith("/api/sources") && req.method === "GET");
+      (pathname.startsWith("/api/sources") && req.method === "GET") ||
+      pathname.startsWith("/api/login");
 
     if (isPublic) return NextResponse.next();
 
@@ -58,6 +59,13 @@ export async function middleware(req: NextRequest) {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
+    }
+  }
+  // Protect app pages except /login
+  if (!pathname.startsWith("/login")) {
+    const token = req.cookies.get("ss_token")?.value;
+    if (!token) {
+      return NextResponse.redirect(new URL("/login", req.url));
     }
   }
   return NextResponse.next();

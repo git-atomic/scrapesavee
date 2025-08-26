@@ -41,5 +41,10 @@ export async function POST(req: Request) {
   const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24; // 24h
   const token = signJwtHS256({ sub: username, exp, roles: ["admin"] }, secret);
 
-  return NextResponse.json({ access_token: token });
+  const res = NextResponse.json({ success: true });
+  res.headers.append(
+    "Set-Cookie",
+    `ss_token=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24}; SameSite=Lax; Secure`
+  );
+  return res;
 }

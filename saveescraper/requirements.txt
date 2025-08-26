@@ -1,0 +1,4 @@
+crawl4ai>=0.2.6
+aiohttp>=3.9.5
+
+

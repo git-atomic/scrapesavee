@@ -26,27 +26,15 @@ export function useEngineStatus() {
   // Toggle engine mutation
   const toggleEngineMutation = useMutation({
     mutationFn: async () => {
-      if (isRunning) {
-        // Stop engine
-        return (
-          workerApi.stopEngine?.() ||
-          Promise.resolve({ data: { success: true } })
-        );
-      } else {
-        // Start engine
-        return (
-          workerApi.startEngine?.() ||
-          Promise.resolve({ data: { success: true } })
-        );
-      }
+      // In dev, run one cycle locally
+      return workerApi.runOnce();
     },
     onSuccess: () => {
-      setIsRunning(!isRunning);
-      toast.success(isRunning ? "Engine stopped" : "Engine started");
+      toast.success("Run triggered");
       queryClient.invalidateQueries({ queryKey: ["engine-health"] });
     },
     onError: (error) => {
-      toast.error(`Failed to ${isRunning ? "stop" : "start"} engine`);
+      toast.error("Failed to trigger run");
       console.error("Engine toggle error:", error);
     },
   });

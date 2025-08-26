@@ -1,0 +1,68 @@
+[
+  {
+    "domain": "savee.com",
+    "expirationDate": 1790249821.136262,
+    "hostOnly": true,
+    "httpOnly": true,
+    "name": "auth_token",
+    "path": "/",
+    "sameSite": "no_restriction",
+    "secure": true,
+    "session": false,
+    "storeId": null,
+    "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc0xvZ2luQXMiOmZhbHNlLCJzZXNzaW9uSUQiOiI2OGE1YjM1YzNjOWNhZjI3MDA0ZmJkOGYiLCJpYXQiOjE3NTU2ODk4MjAsImV4cCI6MTc4NzI0NzQyMCwiaXNzIjoiaHR0cHM6Ly9zYXZlZS5jb20ifQ.BcZgCJ55rlrg2qufsCWZsBxGYKshHvZg9WpdM8TY2kg"
+  },
+  {
+    "domain": ".savee.com",
+    "expirationDate": 1763465822,
+    "hostOnly": false,
+    "httpOnly": false,
+    "name": "_gcl_au",
+    "path": "/",
+    "sameSite": null,
+    "secure": false,
+    "session": false,
+    "storeId": null,
+    "value": "1.1.1459979842.1755689822"
+  },
+  {
+    "domain": ".savee.com",
+    "expirationDate": 1763469733,
+    "hostOnly": false,
+    "httpOnly": false,
+    "name": "_fbp",
+    "path": "/",
+    "sameSite": "lax",
+    "secure": false,
+    "session": false,
+    "storeId": null,
+    "value": "fb.1.1755467966040.686747218493099529"
+  },
+  {
+    "domain": ".savee.com",
+    "expirationDate": 1790253730.818457,
+    "hostOnly": false,
+    "httpOnly": false,
+    "name": "_ga",
+    "path": "/",
+    "sameSite": null,
+    "secure": false,
+    "session": false,
+    "storeId": null,
+    "value": "GA1.1.1885900103.1755467965"
+  },
+  {
+    "domain": ".savee.com",
+    "expirationDate": 1790253730.824968,
+    "hostOnly": false,
+    "httpOnly": false,
+    "name": "_ga_3XGCTD4PJT",
+    "path": "/",
+    "sameSite": null,
+    "secure": false,
+    "session": false,
+    "storeId": null,
+    "value": "GS2.1.s1755689674$o2$g1$t1755693730$j57$l0$h0"
+  }
+]
+

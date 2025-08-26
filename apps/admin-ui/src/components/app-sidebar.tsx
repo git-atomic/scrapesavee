@@ -48,156 +48,27 @@ const data = {
       icon: BarChart3,
       isActive: true,
       items: [
-        {
-          title: "Overview",
-          url: "/",
-        },
-        {
-          title: "Analytics",
-          url: "/analytics",
-        },
-        {
-          title: "Reports",
-          url: "/reports",
-        },
-      ],
-    },
-    {
-      title: "Jobs Manager",
-      url: "/jobs",
-      icon: Play,
-      items: [
-        {
-          title: "Running Jobs",
-          url: "/jobs/running",
-        },
-        {
-          title: "Queued Jobs",
-          url: "/jobs/queued",
-        },
-        {
-          title: "Completed",
-          url: "/jobs/completed",
-        },
-        {
-          title: "Failed Jobs",
-          url: "/jobs/failed",
-        },
+        { title: "Overview", url: "/" },
       ],
     },
     {
       title: "Sources",
-      url: "/sources",
+      url: "/",
       icon: Globe,
-      items: [
-        {
-          title: "All Sources",
-          url: "/sources",
-        },
-        {
-          title: "Savee Home",
-          url: "/sources/home",
-        },
-        {
-          title: "Trending",
-          url: "/sources/trending",
-        },
-        {
-          title: "User Profiles",
-          url: "/sources/users",
-        },
-        {
-          title: "Add New",
-          url: "/sources/new",
-        },
-      ],
+      items: [],
     },
     {
       title: "Media Library",
-      url: "/media",
+      url: "/",
       icon: Images,
-      items: [
-        {
-          title: "All Media",
-          url: "/media",
-        },
-        {
-          title: "Images",
-          url: "/media/images",
-        },
-        {
-          title: "Videos",
-          url: "/media/videos",
-        },
-        {
-          title: "Storage Stats",
-          url: "/media/storage",
-        },
-      ],
-    },
-    {
-      title: "Content",
-      url: "/content",
-      icon: FileText,
-      items: [
-        {
-          title: "All Blocks",
-          url: "/content/blocks",
-        },
-        {
-          title: "Published",
-          url: "/content/published",
-        },
-        {
-          title: "Draft",
-          url: "/content/draft",
-        },
-        {
-          title: "Review Queue",
-          url: "/content/review",
-        },
-      ],
-    },
-    {
-      title: "Users",
-      url: "/users",
-      icon: Users,
-      items: [
-        {
-          title: "Discovered Users",
-          url: "/users/discovered",
-        },
-        {
-          title: "Popular Users",
-          url: "/users/popular",
-        },
-        {
-          title: "User Analytics",
-          url: "/users/analytics",
-        },
-      ],
+      items: [],
     },
   ],
   projects: [
     {
-      name: "Database",
-      url: "/database",
-      icon: Database,
-    },
-    {
       name: "System Health",
-      url: "/health",
+      url: "/",
       icon: Activity,
-    },
-    {
-      name: "Settings",
-      url: "/settings",
-      icon: Settings,
-    },
-    {
-      name: "Logs",
-      url: "/logs",
-      icon: Folder,
     },
   ],
 };

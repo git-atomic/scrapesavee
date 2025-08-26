@@ -3,6 +3,7 @@ Production-ready Savee.com scraper
 """
 import asyncio
 from typing import List, Optional, Set
+from bs4 import BeautifulSoup
 
 from .core import SaveeSession, ScrapedItem
 from ..logging_config import setup_logging
@@ -25,20 +26,20 @@ class SaveeScraper:
                 logger.info(f"Scraping listing: {url}")
                 
                 # Navigate to the page
-                await session.page.goto(url, wait_until='networkidle')
-                
-                # Wait for content to load
-                await session.page.wait_for_selector('.item', timeout=10000)
+                await session.page.goto(url, wait_until='domcontentloaded')
+                await session.page.wait_for_load_state('networkidle')
+
+                # Wait for any item link to appear (more robust than old .item selector)
+                await session.page.wait_for_selector('a[href*="/i/"]', timeout=20000)
                 
                 # Scroll to load more items
                 await self._scroll_and_load(session.page, max_items)
                 
                 # Extract item links
                 item_links = await session.page.evaluate("""
-                    () => {
-                        const items = document.querySelectorAll('.item a');
-                        return Array.from(items).map(a => a.href).filter(href => href.includes('/i/'));
-                    }
+                    () => Array.from(document.querySelectorAll('a[href*="/i/"]'))
+                      .map(a => a.href)
+                      .filter(href => href.includes('/i/'))
                 """)
                 
                 logger.info(f"Found {len(item_links)} item links")
@@ -72,9 +73,10 @@ class SaveeScraper:
         
     async def _scroll_and_load(self, page, max_items: int):
         """Scroll the page to load more items"""
+        from math import ceil
         previous_height = 0
         scroll_attempts = 0
-        max_scrolls = max_items // 20
+        max_scrolls = max(3, ceil(max_items / 20))
         
         while scroll_attempts < max_scrolls:
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -83,7 +85,7 @@ class SaveeScraper:
             current_height = await page.evaluate("document.body.scrollHeight")
             
             if current_height == previous_height:
-                load_more = await page.query_selector('.load-more, .btn-load-more')
+                load_more = await page.query_selector('.load-more, .btn-load-more, button:has-text("Load more")')
                 if load_more:
                     await load_more.click()
                     await asyncio.sleep(2)
@@ -96,46 +98,66 @@ class SaveeScraper:
     async def _scrape_item(self, session: SaveeSession, item_url: str) -> Optional[ScrapedItem]:
         """Scrape a single item page"""
         try:
-            await session.page.goto(item_url, wait_until='networkidle')
-            await session.page.wait_for_selector('.media-container, .image-container', timeout=5000)
-            
-            # Extract item data
+            await session.page.goto(item_url, wait_until='domcontentloaded')
+            await session.page.wait_for_load_state('networkidle')
+            # Try primary selectors first
+            try:
+                await session.page.wait_for_selector('.media-container, .image-container, video, img', timeout=5000)
+            except Exception:
+                pass
+
+            # Extract item data via DOM; fallback to meta tags if needed
             item_data = await session.page.evaluate("""
                 () => {
                     const data = {};
-                    
-                    data.external_id = window.location.pathname.split('/').pop();
-                    
+                    data.external_id = (window.location.pathname.split('/').filter(Boolean).pop()) || null;
                     const titleEl = document.querySelector('h1, .title, .item-title');
                     data.title = titleEl ? titleEl.textContent.trim() : null;
-                    
                     const descEl = document.querySelector('.description, .item-description');
                     data.description = descEl ? descEl.textContent.trim() : null;
-                    
                     const authorEl = document.querySelector('.author, .username');
                     data.author = authorEl ? authorEl.textContent.trim() : null;
-                    
-                    const imgEl = document.querySelector('img.main-image, .media-container img');
+                    const imgEl = document.querySelector('img.main-image, .media-container img, img[alt]');
                     const videoEl = document.querySelector('video');
-                    
                     if (videoEl) {
                         data.media_type = 'video';
-                        data.media_url = videoEl.src;
-                        data.thumbnail_url = videoEl.poster || (imgEl ? imgEl.src : null);
+                        data.media_url = videoEl.src || videoEl.getAttribute('src');
+                        data.thumbnail_url = videoEl.poster || (imgEl ? (imgEl.src || imgEl.getAttribute('src') || imgEl.getAttribute('data-src')) : null);
                     } else if (imgEl) {
                         data.media_type = 'image';
-                        data.media_url = imgEl.src || imgEl.getAttribute('data-src');
-                        data.thumbnail_url = imgEl.src;
-                        data.width = imgEl.naturalWidth;
-                        data.height = imgEl.naturalHeight;
+                        data.media_url = imgEl.src || imgEl.getAttribute('src') || imgEl.getAttribute('data-src');
+                        data.thumbnail_url = imgEl.src || imgEl.getAttribute('src');
+                        data.width = imgEl.naturalWidth || null;
+                        data.height = imgEl.naturalHeight || null;
                     }
-                    
                     const tagElements = document.querySelectorAll('.tag, .hashtag');
-                    data.tags = Array.from(tagElements).map(el => el.textContent.trim().replace('#', ''));
-                    
+                    data.tags = Array.from(tagElements).map(el => (el.textContent||'').trim().replace('#', ''));
                     return data;
                 }
             """)
+
+            # Fallback to OG meta tags if needed
+            if (not item_data.get('media_url') or not item_data.get('external_id')):
+                html = await session.page.content()
+                soup = BeautifulSoup(html, 'html.parser')
+                def meta(name):
+                    el = soup.find('meta', attrs={'property': name}) or soup.find('meta', attrs={'name': name})
+                    return el['content'].strip() if el and el.has_attr('content') else None
+                og_image = meta('og:image') or meta('og:image:secure_url') or meta('twitter:image')
+                og_title = meta('og:title')
+                og_desc = meta('og:description')
+                # Best-effort id from URL
+                external_id = item_url.rstrip('/').split('/')[-1]
+                if og_image and external_id:
+                    item_data = {
+                        'external_id': external_id,
+                        'title': og_title,
+                        'description': og_desc,
+                        'media_type': 'image',
+                        'media_url': og_image,
+                        'thumbnail_url': og_image,
+                        'tags': [],
+                    }
             
             if not item_data.get('external_id') or not item_data.get('media_url'):
                 return None

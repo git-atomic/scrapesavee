@@ -1,0 +1,37 @@
+---
+description: Queue (RabbitMQ), DB (Neon), and Storage (R2) rules
+---
+
+# Queue, DB, and Storage
+
+## RabbitMQ
+
+- Exchange: scrape.direct; Queues: sweep.tail, sweep.backfill, item.jobs, item.dlq
+- Set durable queues; prefetch tuned; ack on success; reject to DLQ on failure
+- Message payloads are small JSON with sourceId/saveeId/pageUrl
+
+References:
+
+- Setup/bind/publish/consume: [apps/worker/src/queue.py](mdc:apps/worker/src/queue.py)
+- Handlers that enqueue items: [apps/worker/src/worker.py](mdc:apps/worker/src/worker.py)
+
+## Neon Postgres
+
+- Tables: sources, runs, items (global by savee_id), item_sources (link)
+- PK: items(id) and unique(item_sources itemId+sourceId)
+- ON CONFLICT DO UPDATE for merge; indexes on created_at, media_type
+- `item_exists()` early guard to avoid heavy writes when not needed
+
+References:
+
+- Schema and helpers: [apps/worker/src/db.py](mdc:apps/worker/src/db.py)
+
+## R2
+
+- Private bucket; path-style endpoint; keys under <saveeId>/...
+- Signed URLs via CMS; no public access
+- Use HEAD to dedupe; upload only when missing; store s3:// paths as object keys
+
+References:
+
+- Media helpers: [apps/worker/src/media.py](mdc:apps/worker/src/media.py)

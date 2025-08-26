@@ -1,0 +1,50 @@
+---
+alwaysApply: true
+description: End-to-end architecture, priorities, and constraints
+---
+
+# Architecture Overview
+
+Priorities: Efficient, reliable, secure, robust, performant, cost-free where possible.
+
+## Components
+
+- Scraper Worker (Python + Crawl4AI + Playwright): 24/7 item discovery & extraction
+- Queue (RabbitMQ / CloudAMQP free): reliable fan-out, acks, DLQ, TTL
+- Database (Neon Postgres free): items (global), sources, item_sources, runs
+- Storage (Cloudflare R2 free): private media (image, video, poster), signed URLs
+- CMS/API (Payload): admin UI, REST for frontend, presign endpoints
+- Frontend (Next.js on Vercel): masonry UI like Savee/Pinterest/cosmos
+
+## Flows
+
+- Tail sweep (every 60s): fetch top tiles, enqueue items
+- Backfill sweep (off-hours): deep scroll until idle, enqueue oldest→newest
+- Item processing: visit page, click Info, extract HD media + sidebar + source API, upload to R2, upsert DB (idempotent)
+- Frontend pulls lists via Payload; media via presigned URLs; ISR + optional revalidate hooks
+
+## Operational Playbook
+
+- Provision Neon (free): create project + database; set `DATABASE_URL`
+- Provision CloudAMQP (free): create instance; set `AMQP_URL`
+- Provision Cloudflare R2 (free): create private bucket + token with bucket-scoped permissions; set `R2_*`
+- Optional: Oracle Cloud Always Free VM; run `apps/worker` via Docker Compose
+- Optional: Cloudflare Tunnel to expose CMS/API on a subdomain
+
+## Reliability & Dedupe
+
+- Unique PK on `items.id`; `item_sources(itemId,sourceId)` composite PK
+- `ON CONFLICT DO UPDATE` merge for `items`; early skip if `item_exists`
+- R2: `head_object` before upload to avoid re-uploads
+- RabbitMQ DLQ for failed `item.jobs`; exponential backoff retries in worker
+
+## Security
+
+- No public buckets; private R2 with presign
+- Sessions encrypted in CMS; worker reads via env for local/dev
+- CORS allowlist; no secrets in logs
+
+## Scaling
+
+- JOB_CONCURRENCY + ITEM_CONCURRENCY; queue prefetch/QoS
+- DB unique keys for dedupe; retries with backoff; DLQ

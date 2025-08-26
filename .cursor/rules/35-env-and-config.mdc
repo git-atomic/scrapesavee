@@ -1,0 +1,39 @@
+---
+description: Environment variables and configuration for worker, queue, DB, R2, and CMS
+---
+
+# Environment & Configuration
+
+## Core
+
+- `DATABASE_URL`: Neon Postgres connection URL
+- `AMQP_URL`: RabbitMQ/CloudAMQP connection URL
+- `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+
+## Worker Tuning
+
+- `ITEM_CONCURRENCY`: consumers for `item.jobs` (default 3)
+- `TAIL_SWEEP_TOP_LIMIT`: cap items enqueued by tail sweep (default 120)
+- `JOB_POLL_SECONDS`: scheduler poll interval (default 60)
+- `BACKFILL_ENABLE`: enable backfill (default 1)
+- `BACKFILL_WINDOW`: time window UTC, e.g., `02:00-05:00`
+
+## Browser Session
+
+- Cookies: `COOKIES_JSON` or `COOKIES_PATH` (JSON from browser export)
+- Storage state: `STORAGE_STATE_PATH` or `STORAGE_STATE_JSON`
+- `USER_AGENT`: override default UA if needed
+
+## CMS Bridge (optional)
+
+- `CMS_URL`: Payload base URL
+- `APP_KEY`: shared app key header for `/sources`
+
+## File References
+
+- Scheduler: [apps/worker/src/scheduler.py](mdc:apps/worker/src/scheduler.py)
+- Worker: [apps/worker/src/worker.py](mdc:apps/worker/src/worker.py)
+- Queue: [apps/worker/src/queue.py](mdc:apps/worker/src/queue.py)
+- DB: [apps/worker/src/db.py](mdc:apps/worker/src/db.py)
+- Media: [apps/worker/src/media.py](mdc:apps/worker/src/media.py)
+- Session: [apps/worker/src/session.py](mdc:apps/worker/src/session.py)

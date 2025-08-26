@@ -1,0 +1,51 @@
+---
+description: Operational runbook for local/dev deploy, Docker, and reliability
+---
+
+# Ops Runbook
+
+## Local Development
+
+- Python: install from [apps/worker/requirements.txt](mdc:apps/worker/requirements.txt)
+- Set env in `apps/worker/.env` (copy example from this rule)
+- Run scheduler: `python -m src.scheduler`
+- Run worker: `python -m src.worker`
+
+## Docker Compose
+
+- Compose file: [apps/worker/docker-compose.yml](mdc:apps/worker/docker-compose.yml)
+- Mount cookies: `../../cookies.json:/app/cookies.json:ro`
+- Commands:
+  - `docker compose up --build worker scheduler`
+
+## Reliability
+
+- Queue DLQ: monitor `item.dlq` for poisoned messages
+- Retrying: tenacity exponential backoff in `process_item`
+- Dedupe: `item_exists()` early return + `r2_head_object` before uploads
+
+## Example .env
+
+```
+DATABASE_URL=postgres://user:pass@host/db
+AMQP_URL=amqps://user:pass@host/vhost
+R2_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+R2_BUCKET=scrapesavee
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+ITEM_CONCURRENCY=3
+TAIL_SWEEP_TOP_LIMIT=120
+JOB_POLL_SECONDS=60
+BACKFILL_ENABLE=1
+BACKFILL_WINDOW=02:00-05:00
+COOKIES_PATH=/app/cookies.json
+USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36
+CMS_URL=
+APP_KEY=
+```
+
+## Runbooks
+
+- Backfill: ensure `BACKFILL_ENABLE=1`, time is within `BACKFILL_WINDOW`, scheduler publishes to `sweep.backfill`
+- Tail sweep: adjust `TAIL_SWEEP_TOP_LIMIT` to balance discovery and cost
+- Hotfix scraper selectors: update [apps/worker/src/scraper/item.py](mdc:apps/worker/src/scraper/item.py) and/or [apps/worker/src/scraper/listing.py](mdc:apps/worker/src/scraper/listing.py)

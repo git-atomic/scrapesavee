@@ -1,0 +1,110 @@
+---
+description: Payload CMS v3 integration rules and best practices
+globs: apps/payload/**/*
+---
+
+# Payload CMS v3 Rules
+
+## Architecture
+
+- **Next.js Integration**: Payload v3 integrates seamlessly with Next.js - place Payload within Next.js app directory
+- **React Server Components**: Admin panel rebuilt with RSC for better performance
+- **TypeScript First**: Always use TypeScript with proper types
+- **ESM Support**: Use ES modules with `.js` extensions for relative imports
+
+## Project Structure
+
+```
+apps/payload/
+├── src/
+│   ├── app/
+│   │   ├── (payload)/
+│   │   │   └── admin/
+│   │   │       └── [[...segments]]/
+│   │   │           └── page.tsx
+│   │   └── (app)/
+│   │       └── // Your app routes
+│   ├── collections/
+│   │   ├── Users.ts
+│   │   ├── Sources.ts
+│   │   ├── Items.ts
+│   │   ├── Runs.ts
+│   │   └── Media.ts
+│   ├── endpoints/
+│   │   └── worker/
+│   ├── components/
+│   │   └── admin/
+│   └── payload.config.ts
+├── next.config.js
+├── package.json
+└── .env
+```
+
+## Installation Commands
+
+1. **Create new app**: `npx create-payload-app@latest`
+2. **Use TypeScript**: Always select TypeScript during setup
+3. **Database adapter**: Use `@payloadcms/db-postgres` for Neon
+4. **Storage**: Use `@payloadcms/storage-s3` for R2 compatibility
+
+## Key Dependencies
+
+```json
+{
+  "dependencies": {
+    "payload": "^3.0.0",
+    "@payloadcms/next": "^3.0.0",
+    "@payloadcms/ui": "^3.0.0",
+    "@payloadcms/db-postgres": "^3.0.0",
+    "@payloadcms/storage-s3": "^3.0.0",
+    "@payloadcms/richtext-lexical": "^3.0.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.33.0"
+  }
+}
+```
+
+## Configuration Rules
+
+- **Config file**: Always place `payload.config.ts` in `src/` directory
+- **Environment**: Use `.env.local` for Next.js compatibility
+- **Database**: Configure with proper schema support
+- **Storage**: Private buckets with presigned URLs only
+- **CORS**: Properly configure for worker communication
+
+## Admin Panel Customization
+
+- **Custom Components**: Place in `src/components/admin/`
+- **Dashboard**: Use React Server Components for performance
+- **Collections**: Group logically (Engine, Data)
+- **Endpoints**: Place worker endpoints in `src/endpoints/worker/`
+
+## Security Best Practices
+
+- **Secrets**: Strong secrets in production
+- **Access Control**: Proper RBAC implementation
+- **CORS**: Restrictive CORS settings
+- **Environment**: Never commit secrets to git
+
+## Worker Integration
+
+- **Endpoints**: Create worker-specific API routes
+- **Authentication**: Use APP_KEY for worker auth
+- **Database**: Share database connection with worker
+- **Storage**: Use same R2 bucket with different permissions
+
+## Development Workflow
+
+1. **Start**: `pnpm dev`
+2. **Build**: `pnpm build`
+3. **Production**: `pnpm start`
+4. **Migrations**: `pnpm payload migrate`
+
+## File References
+
+- Main config: [src/payload.config.ts](mdc:apps/payload/src/payload.config.ts)
+- Collections: [src/collections/](mdc:apps/payload/src/collections/)
+- Worker endpoints: [src/endpoints/worker/](mdc:apps/payload/src/endpoints/worker/)
+- Admin components: [src/components/admin/](mdc:apps/payload/src/components/admin/)

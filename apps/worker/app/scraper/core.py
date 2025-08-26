@@ -1,0 +1,173 @@
+"""
+Core scraping functionality for Savee.com
+"""
+import asyncio
+import json
+from datetime import datetime
+from typing import Dict, List, Optional, Set
+from urllib.parse import urljoin, urlparse
+
+import aiohttp
+from playwright.async_api import async_playwright, Browser, Page
+from pydantic import BaseModel, Field
+
+from ..logging_config import setup_logging
+from ..config import settings
+
+logger = setup_logging(__name__)
+
+
+class ScrapedItem(BaseModel):
+    """Scraped item data structure"""
+    external_id: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    media_type: str  # 'image' or 'video'
+    media_url: str
+    thumbnail_url: Optional[str] = None
+    source_url: str
+    author: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    width: Optional[int] = None
+    height: Optional[int] = None
+    file_size: Optional[int] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SaveeSession:
+    """Manages Savee.com session with cookies and authentication"""
+    
+    def __init__(self):
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.browser: Optional[Browser] = None
+        self.page: Optional[Page] = None
+        # Prefer runtime-provided cookies
+        self.cookies = {}
+        
+    async def __aenter__(self):
+        await self.start()
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+        
+    async def start(self):
+        """Initialize session with browser and HTTP client"""
+        # Start Playwright browser
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+                '--disable-gpu'
+            ]
+        )
+        
+        # Create page with cookies
+        self.page = await self.browser.new_page()
+        await self.page.set_extra_http_headers({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        
+        # Load cookies from env (COOKIES_JSON or COOKIES_PATH) if available
+        cookies_loaded = False
+        if settings.COOKIES_JSON:
+            try:
+                data = json.loads(settings.COOKIES_JSON)
+                # Accept both Chrome-exported list and simple name/value mapping
+                if isinstance(data, list):
+                    for c in data:
+                        if 'name' in c and 'value' in c:
+                            await self.page.context.add_cookies([{
+                                'name': c['name'],
+                                'value': c['value'],
+                                'domain': c.get('domain', '.savee.com'),
+                                'path': c.get('path', '/'),
+                                'httpOnly': c.get('httpOnly', False),
+                                'secure': c.get('secure', True),
+                            }])
+                    cookies_loaded = True
+                elif isinstance(data, dict):
+                    for name, value in data.items():
+                        await self.page.context.add_cookies([{
+                            'name': name,
+                            'value': value,
+                            'domain': '.savee.com',
+                            'path': '/',
+                            'secure': True,
+                        }])
+                    cookies_loaded = True
+            except Exception:
+                pass
+
+        if not cookies_loaded and settings.COOKIES_PATH:
+            try:
+                with open(settings.COOKIES_PATH, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    for c in data:
+                        if 'name' in c and 'value' in c:
+                            await self.page.context.add_cookies([{
+                                'name': c['name'],
+                                'value': c['value'],
+                                'domain': c.get('domain', '.savee.com'),
+                                'path': c.get('path', '/'),
+                                'httpOnly': c.get('httpOnly', False),
+                                'secure': c.get('secure', True),
+                            }])
+                    cookies_loaded = True
+                elif isinstance(data, dict):
+                    for name, value in data.items():
+                        await self.page.context.add_cookies([{
+                            'name': name,
+                            'value': value,
+                            'domain': '.savee.com',
+                            'path': '/',
+                            'secure': True,
+                        }])
+                    cookies_loaded = True
+            except Exception:
+                pass
+
+        # Fallback to any hardcoded cookies (discouraged)
+        if self.cookies:
+            for name, value in self.cookies.items():
+                await self.page.context.add_cookies([{
+                    'name': name,
+                    'value': value,
+                    'domain': '.savee.com',
+                    'path': '/',
+                }])
+            
+        # Create HTTP session
+        self.session = aiohttp.ClientSession(
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Connection': 'keep-alive',
+            },
+            cookies=self.cookies
+        )
+        
+        logger.info("Savee session initialized")
+        
+    async def close(self):
+        """Clean up resources"""
+        if self.session:
+            await self.session.close()
+        if self.page:
+            await self.page.close()
+        if self.browser:
+            await self.browser.close()
+        if hasattr(self, 'playwright'):
+            await self.playwright.stop()
+            
+        logger.info("Savee session closed")
+

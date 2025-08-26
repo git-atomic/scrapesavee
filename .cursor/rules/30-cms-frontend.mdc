@@ -1,0 +1,53 @@
+---
+description: CMS (Payload) and Frontend (Vercel) rules
+---
+
+# CMS & Frontend
+
+## Payload CMS
+
+- Collections: sources, sessions, runs, items, item_sources
+- Endpoints: sources CRUD, trigger run, items listing with filters, presign media, optional revalidate webhook
+- Security: encrypt sessions; restrict CORS to frontend; short-lived presigned URLs
+
+### File references
+
+- Scheduler prefers CMS over DB for sources: [apps/worker/src/scheduler.py](mdc:apps/worker/src/scheduler.py)
+- Queue integration contract (AMQP): [apps/worker/src/queue.py](mdc:apps/worker/src/queue.py)
+
+### Collections (draft)
+
+- Sources: name, type(home|pop|user), url, enabled, schedule, behavior
+- Runs: sourceId, status, counters, error, started_at, finished_at
+- Items: id(saveeId), mediaType, objectKeys, sidebar, og\*, created/updated
+- ItemSources: link collection
+- Sessions: encrypted cookie jars or storage state
+
+### REST
+
+- POST /sources (create/update), GET /sources
+- POST /runs/trigger (tail/backfill) → enqueues via AMQP
+- GET /items?media=image|video&tag=...&color=...
+- POST /media/presign → signed URL to R2
+
+### Payload v3 Development Guidelines
+
+**IMPORTANT**: This project now uses Payload CMS v3. See [50-payload-cms-v3.mdc](mdc:.cursor/rules/50-payload-cms-v3.mdc) for detailed v3 rules.
+
+- Use TypeScript; avoid enums; prefer maps and union literals.
+- Model `items` with minimal denormalized fields and `mediaObjectKeys` JSON.
+- Implement presign endpoint server-side and never expose R2 creds to client.
+- Use access control to restrict mutation endpoints with app key or session.
+- **V3 Specific**: Use Next.js app router, React Server Components, proper ESM imports.
+
+## Frontend (Next.js)
+
+- Routes: '/', '/pop', '/users', '/users/:username', '/i/:id'
+- Masonry grid with virtualization; infinite scroll; filters (tags, colorHex, media)
+- Fetch via Payload REST; ISR ~60s + optional on-demand revalidate
+
+### Frontend guidelines
+
+- Prefer RSC; minimize `use client` and effects.
+- Masonry grid virtualization for performance; avoid layout thrash.
+- Pull media via short-lived presigned URLs; never public R2.

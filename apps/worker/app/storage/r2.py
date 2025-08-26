@@ -1,0 +1,326 @@
+"""
+Cloudflare R2 storage integration for media files
+"""
+import asyncio
+import hashlib
+import mimetypes
+from datetime import datetime, timedelta
+from io import BytesIO
+from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse
+
+import aiohttp
+from PIL import Image
+import aioboto3
+from botocore.exceptions import ClientError
+
+from ..config import settings
+from ..logging_config import setup_logging
+
+logger = setup_logging(__name__)
+
+
+class R2Storage:
+    """Cloudflare R2 storage manager"""
+    
+    def __init__(self):
+        self.session = None
+        self.client = None
+        
+    async def __aenter__(self):
+        await self.connect()
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+        
+    async def connect(self):
+        """Connect to R2"""
+        try:
+            self.session = aioboto3.Session()
+            self.client = await self.session.client(
+                's3',
+                endpoint_url=settings.r2_endpoint_url,
+                aws_access_key_id=settings.r2_access_key_id,
+                aws_secret_access_key=settings.r2_secret_access_key,
+                region_name='auto'
+            ).__aenter__()
+            
+            logger.info("Connected to Cloudflare R2")
+            
+        except Exception as e:
+            logger.error(f"Failed to connect to R2: {e}")
+            raise
+            
+    async def close(self):
+        """Close R2 connection"""
+        if self.client:
+            await self.client.__aexit__(None, None, None)
+            
+    async def object_exists(self, key: str) -> bool:
+        """Check if object exists in R2"""
+        try:
+            await self.client.head_object(Bucket=settings.r2_bucket_name, Key=key)
+            return True
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                return False
+            raise
+            
+    async def upload_file(self, file_data: bytes, key: str, content_type: str = None) -> str:
+        """Upload file to R2"""
+        if not content_type:
+            content_type = mimetypes.guess_type(key)[0] or 'application/octet-stream'
+            
+        # Check if file already exists
+        if await self.object_exists(key):
+            logger.debug(f"File already exists: {key}")
+            return key
+            
+        try:
+            await self.client.put_object(
+                Bucket=settings.r2_bucket_name,
+                Key=key,
+                Body=file_data,
+                ContentType=content_type,
+                CacheControl='public, max-age=31536000',  # 1 year
+            )
+            
+            logger.debug(f"Uploaded file: {key}")
+            return key
+            
+        except Exception as e:
+            logger.error(f"Failed to upload {key}: {e}")
+            raise
+            
+    async def download_url(self, url: str) -> bytes:
+        """Download file from URL"""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise ValueError(f"Failed to download {url}: {response.status}")
+                return await response.read()
+                
+    async def upload_image(self, image_url: str, base_key: str) -> str:
+        """Upload image with multiple sizes and thumbnails"""
+        try:
+            # Download original image
+            image_data = await self.download_url(image_url)
+            
+            # Generate key based on content hash
+            content_hash = hashlib.sha256(image_data).hexdigest()[:16]
+            ext = self._get_file_extension(image_url)
+            
+            # Upload original
+            original_key = f"{base_key}/original_{content_hash}{ext}"
+            await self.upload_file(image_data, original_key)
+            
+            # Generate thumbnails
+            await self._generate_thumbnails(image_data, base_key, content_hash, ext)
+            
+            return original_key
+            
+        except Exception as e:
+            logger.error(f"Failed to upload image {image_url}: {e}")
+            raise
+            
+    async def upload_video(self, video_url: str, base_key: str) -> str:
+        """Upload video file"""
+        try:
+            # Download video
+            video_data = await self.download_url(video_url)
+            
+            # Generate key based on content hash
+            content_hash = hashlib.sha256(video_data).hexdigest()[:16]
+            ext = self._get_file_extension(video_url)
+            
+            # Upload video
+            video_key = f"{base_key}/video_{content_hash}{ext}"
+            await self.upload_file(video_data, video_key, 'video/mp4')
+            
+            return video_key
+            
+        except Exception as e:
+            logger.error(f"Failed to upload video {video_url}: {e}")
+            raise
+            
+    async def _generate_thumbnails(self, image_data: bytes, base_key: str, content_hash: str, ext: str):
+        """Generate multiple thumbnail sizes"""
+        sizes = [
+            ('thumb', 150, 150),
+            ('small', 300, 300),
+            ('medium', 600, 600),
+            ('large', 1200, 1200)
+        ]
+        
+        try:
+            # Open image
+            image = Image.open(BytesIO(image_data))
+            
+            # Convert to RGB if necessary
+            if image.mode in ('RGBA', 'LA', 'P'):
+                image = image.convert('RGB')
+                
+            for size_name, width, height in sizes:
+                # Create thumbnail
+                thumb = image.copy()
+                thumb.thumbnail((width, height), Image.Resampling.LANCZOS)
+                
+                # Save to bytes
+                thumb_buffer = BytesIO()
+                thumb.save(thumb_buffer, format='JPEG', quality=85, optimize=True)
+                thumb_data = thumb_buffer.getvalue()
+                
+                # Upload thumbnail
+                thumb_key = f"{base_key}/{size_name}_{content_hash}.jpg"
+                await self.upload_file(thumb_data, thumb_key, 'image/jpeg')
+                
+        except Exception as e:
+            logger.error(f"Failed to generate thumbnails: {e}")
+            # Don't raise - thumbnails are optional
+            
+    def _get_file_extension(self, url: str) -> str:
+        """Get file extension from URL"""
+        parsed = urlparse(url)
+        path = parsed.path.lower()
+        
+        if path.endswith(('.jpg', '.jpeg')):
+            return '.jpg'
+        elif path.endswith('.png'):
+            return '.png'
+        elif path.endswith('.gif'):
+            return '.gif'
+        elif path.endswith('.webp'):
+            return '.webp'
+        elif path.endswith('.mp4'):
+            return '.mp4'
+        elif path.endswith('.webm'):
+            return '.webm'
+        else:
+            return '.jpg'  # Default
+            
+    async def get_presigned_url(self, key: str, expires_in: int = 3600) -> str:
+        """Generate presigned URL for private access"""
+        try:
+            url = await self.client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': settings.r2_bucket_name, 'Key': key},
+                ExpiresIn=expires_in
+            )
+            return url
+            
+        except Exception as e:
+            logger.error(f"Failed to generate presigned URL for {key}: {e}")
+            raise
+            
+    async def get_presigned_urls_batch(self, keys: List[str], expires_in: int = 3600) -> Dict[str, str]:
+        """Generate multiple presigned URLs efficiently"""
+        urls = {}
+        
+        tasks = []
+        for key in keys:
+            task = self.get_presigned_url(key, expires_in)
+            tasks.append((key, task))
+            
+        results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
+        
+        for (key, _), result in zip(tasks, results):
+            if isinstance(result, Exception):
+                logger.error(f"Failed to get presigned URL for {key}: {result}")
+                urls[key] = None
+            else:
+                urls[key] = result
+                
+        return urls
+        
+    async def delete_object(self, key: str):
+        """Delete object from R2"""
+        try:
+            await self.client.delete_object(Bucket=settings.r2_bucket_name, Key=key)
+            logger.debug(f"Deleted object: {key}")
+            
+        except Exception as e:
+            logger.error(f"Failed to delete {key}: {e}")
+            raise
+            
+    async def list_objects(self, prefix: str = '', limit: int = 1000) -> List[Dict]:
+        """List objects in bucket"""
+        try:
+            response = await self.client.list_objects_v2(
+                Bucket=settings.r2_bucket_name,
+                Prefix=prefix,
+                MaxKeys=limit
+            )
+            
+            objects = []
+            for obj in response.get('Contents', []):
+                objects.append({
+                    'key': obj['Key'],
+                    'size': obj['Size'],
+                    'last_modified': obj['LastModified'],
+                    'etag': obj['ETag'].strip('"')
+                })
+                
+            return objects
+            
+        except Exception as e:
+            logger.error(f"Failed to list objects: {e}")
+            raise
+            
+    async def get_storage_stats(self) -> Dict:
+        """Get storage statistics"""
+        try:
+            # List all objects (this could be expensive for large buckets)
+            objects = await self.list_objects(limit=10000)
+            
+            total_size = sum(obj['size'] for obj in objects)
+            total_count = len(objects)
+            
+            # Count by type
+            image_count = len([obj for obj in objects if obj['key'].endswith(('.jpg', '.png', '.gif', '.webp'))])
+            video_count = len([obj for obj in objects if obj['key'].endswith(('.mp4', '.webm'))])
+            
+            return {
+                'total_objects': total_count,
+                'total_size_bytes': total_size,
+                'total_size_gb': round(total_size / (1024 ** 3), 2),
+                'image_count': image_count,
+                'video_count': video_count,
+                'usage_percent': min(100, (total_size / (10 * 1024 ** 3)) * 100)  # Assume 10GB limit
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to get storage stats: {e}")
+            return {
+                'total_objects': 0,
+                'total_size_bytes': 0,
+                'total_size_gb': 0,
+                'image_count': 0,
+                'video_count': 0,
+                'usage_percent': 0
+            }
+
+
+# Global storage instance
+_storage: Optional[R2Storage] = None
+
+
+async def get_storage() -> R2Storage:
+    """Get or create the global storage instance"""
+    global _storage
+    
+    if _storage is None:
+        _storage = R2Storage()
+        await _storage.connect()
+        
+    return _storage
+
+
+async def close_storage():
+    """Close the global storage instance"""
+    global _storage
+    
+    if _storage:
+        await _storage.close()
+        _storage = None
+
